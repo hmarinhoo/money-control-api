@@ -7,6 +7,11 @@ public class Category {
     private String name;
     private String icon;
 
+    @Override
+    public String toString() {
+        return "Category [id=" + id + ", name=" + name + ", icon=" + icon + "]";
+    }
+
     public Category(Long id, String name, String icon) {
         this.id = Math.abs(new Random().nextLong());
         // math.abs é para pegar um valor absoluto. o restante é para pegar um id
