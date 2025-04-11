@@ -1,10 +1,12 @@
 package br.com.fiap.money_control_api.controller;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -19,59 +21,66 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import br.com.fiap.money_control_api.model.Category;
+import br.com.fiap.money_control_api.repository.CategoryRepository;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/categories")
 public class CategoryController {
 
 	private final Logger log = LoggerFactory.getLogger(getClass());
-	private List<Category> repository = new ArrayList<>();
+	// Injeção de Dependência
+	@Autowired
+	private CategoryRepository repository;
 
-	@GetMapping // Método get retorna todas as categorias
-	public List<Category> index() { // mocky são dados fixos para variáveis de teste
-		return repository;
+	@GetMapping
+	@Cacheable("categories")
+	@Operation(tags = "Category", summary = "Listar categorias", description = "Devolve a lista de categorias com paginação e filtro...")
+	public List<Category> index() {
+		return repository.findAll();
 	}
 
 	@PostMapping
-	// @ResponseStatus(code = HttpStatus.CREATED)
-	public ResponseEntity<Category> create(@RequestBody Category category) {
-		log.info("Cadastrando categoria" + category.getName());
-		repository.add(category);
+	@ResponseStatus(code = HttpStatus.CREATED)
+	@Operation(responses = @ApiResponse(responseCode = "400", description = "Validação falhou"))
+	@CacheEvict(value = "categories", allEntries = true)
+	public ResponseEntity<Category> create(@RequestBody @Valid Category category) {
+		log.info("Cadastrando categoria " + category.getName());
+		repository.save(category);
 		return ResponseEntity.status(201).body(category);
 	}
 
-	@GetMapping("{id}") // Método vai retornar a categoria que eu estou pedindo
+	@GetMapping("{id}")
 	public Category get(@PathVariable Long id) {
-		log.info("Buscando categoria" + id);
+		log.info("buscando categoria " + id);
 		return getCategory(id);
 	}
 
 	@DeleteMapping("{id}")
-	@ResponseStatus(HttpStatus.NO_CONTENT) // noContent - deu certo, mas não tem um conteúdo para mostrar.
+	@CacheEvict(value = "categories", allEntries = true)
+	@ResponseStatus(HttpStatus.NO_CONTENT)
 	public void destroy(@PathVariable Long id) {
 		log.info("Apagando categoria " + id);
-		repository.remove(getCategory(id));
+		repository.delete(getCategory(id));
 	}
 
-	// Método Patch é para mudanças de só um campo.
-	// Método Put é pata mudanças gerais (tudo).
 	@PutMapping("{id}")
+	@CacheEvict(value = "categories", allEntries = true)
 	public Category update(@PathVariable Long id, @RequestBody Category category) {
 		log.info("Atualizando categoria " + id + " para " + category);
 
-		repository.remove(getCategory(id));
 		category.setId(id);
-		repository.add(category);
-
-		return category;
+		return repository.save(category);
 	}
 
 	private Category getCategory(Long id) {
-		return repository.stream()
-				.filter(c -> c.getId().equals(id))
-				.findFirst()
-				.orElseThrow( // papel do if de verificação
+		return repository
+				.findById(id)
+				.orElseThrow(
 						() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
 
 	}
+
 }
